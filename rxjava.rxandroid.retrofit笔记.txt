@@ -1,0 +1,549 @@
+-----------------------------------------------------
+博客笔记:
+
+三(博文总结):RxJava 和 RxAndroid   //系列
+// 博客园 : http://www.cnblogs.com/zhaoyanjun/p/5502804.html
+
+	1.观察者的创建 
+		Subscriber继承Observer, 只是 Subscriber对Observer做了一些扩展。Subscriber的使用和Observer完全一样。
+        Subscriber 多了一个 onStart 方法 
+		//onStart(): 这是 Subscriber 增加的方法。它会在 subscribe 刚开始，而事件还未发送之前被调用，可以用于做一些准备工作，例如数据的清零或重置。
+			这是一个可选方法，默认情况下它的实现为空。需要注意的是，如果对准备工作的线程有要求（例如弹出一个显示进度的对话框，这必须在主线程执行）， 
+			onStart() 就不适用了，因为它总是在 subscribe 所发生的线程被调用，而不能指定线程。要在指定的线程来做准备工作，可以使用 doOnSubscribe() 方法，具体可以在后面的文中看到。
+			
+	2.创建被观察者
+	
+	3.订阅  // 由于观察者可以由两种方式被创建，所以订阅的方式也有两种
+		observable.subscribe( observer ) ;
+		observable.subscribe( subscriber ) ;
+		
+		Observable.subscribe(Subscriber) 的内部实现是这样的（仅核心代码）：
+		// 注意：这不是 subscribe() 的源码，而是将源码中与性能、兼容性、扩展性有关的代码剔除后的核心代码。
+		// 如果需要看源码，可以去 RxJava 的 GitHub 仓库下载。
+		public Subscription subscribe(Subscriber subscriber) {
+			subscriber.onStart();
+			onSubscribe.call(subscriber);
+			return subscriber;
+		}
+		
+		
+		1.在subscribe() 中，首先会调用 onStart() 方法，这个方法前文已经介绍了，是可选的。接着会调用 call()方法，我们已经分析了在call()方法中会调用多次 onNext() ，最后调用 onCompleted().看到这里你就会突然明白原来subscribe() 方法其实相当于依次执行了：onStart() --> onNext（）--> onCompleted（）
+		2.从这也可以看出，在 RxJava 中，Observable 并不是在创建的时候就立即开始发送事件，而是在它被订阅的时候，即当 subscribe() 方法执行的时候。
+		3.Observer 和 Subscriber 具有相同的角色，而且 Observer 在 subscribe() 过程中最终会被转换成 Subscriber对象
+		4.将传入的 Subscriber 作为 Subscription 返回。这是为了方便 unsubscribe().   
+		
+	4. RxBus // EventBus , 他是android 中的事件总线。用rxjava同样可以实现android的事件总线功能，也就是RxBus.
+		1.注册与反注册 , 发布和观察线程的任意切换 , 异常处理
+		
+	5.操作符的使用
+		1.merge操作符，合并观察对象
+			界面需要等到多个接口并发取完数据，再更新
+			 Observable.merge(observable1, observable2)
+            .subscribeOn(Schedulers.newThread())
+            .subscribe(System.out::println);
+			
+		2.zip  操作符，合并多个观察对象的数据。并且允许 Func2（）函数重新发送合并后的数据
+		3.scan累加器操作符的使用
+		4.filter 过滤操作符的使用
+		5.消息数量过滤操作符的使用
+			take ：取前n个数据
+			takeLast：取后n个数据
+			first 只发送第一个数据
+			last 只发送最后一个数据
+			skip() 跳过前n个数据发送后面的数据
+			skipLast() 跳过最后n个数据，发送前面的数据
+			
+		6.elementAt 、elementAtOrDefault
+			1.elementAt() 发送数据序列中第n个数据 ，序列号从0开始
+			  //如果该序号大于数据序列中的最大序列号，则会抛出异常，程序崩溃
+			  //所以在用elementAt操作符的时候，要注意判断发送的数据序列号是否越界
+			2.elementAtOrDefault( int n , Object default ) 发送数据序列中第n个数据 ，序列号从0开始。
+			  //如果序列中没有该序列号，则发送默认值
+			  
+		7.startWith() 插入数据
+			//插入普通数据   
+			//startWith 数据序列的开头插入一条指定的项 , 最多插入9条数据
+			
+			//插入Observable对象
+			
+		8.delay操作符，延迟数据发送
+			 //延迟数据发射的时间，仅仅延时一次，也就是发射第一个数据前延时。发射后面的数据不延时
+		
+		9.Timer  延时操作符的使用
+			//使用场景：xx秒后，执行xx  
+			
+			 delay 、timer 总结：　
+				相同点：delay 、 timer 都是延时操作符。
+				不同点：delay  延时一次，延时完成后，可以连续发射多个数据。timer延时一次，延时完成后，只发射一次数据
+			
+		10.interval 轮询操作符，循环发送数据，数据从0开始递增
+			 //参数一：延迟时间  参数二：间隔时间  参数三：时间颗粒度
+				Observable observable =  Observable.interval(3000, 3000, TimeUnit.MILLISECONDS) ;
+			
+		11.doOnNext() 操作符，在每次 OnNext() 方法被调用前执行
+			// 使用场景：从网络请求数据，在数据被展示前，缓存到本地
+			
+		12.Buffer 操作符
+			Buffer( int n )      把n个数据打成一个list包，然后再次发送。
+			Buffer( int n , int skip)   把n个数据打成一个list包，然后跳过第skip个数据。
+			
+			//使用场景：一个按钮每点击3次，弹出一个toast
+			
+		13.throttleFirst 操作符  // 在一段时间内，只取第一个事件，然后其他事件都丢弃。
+			//使用场景：1、button按钮防抖操作，防连续点击   2、百度关键词联想，在一段时间内只联想一次，防止频繁请求服务器 
+		
+		14.distinct    过滤重复的数据
+			distinct()
+			distinctUntilChanged()  过滤连续重复的数据
+			
+		15.debounce() 操作符
+			 一段时间内没有变化，就会发送一个数据。
+			  使用场景：百度关键词联想提示。在输入的过程中是不会从服务器拉数据的。当输入结束后，在400毫秒没有输入就会去获取数据。
+		
+		
+		
+		16.doOnSubscribe()  
+			使用场景： 可以在事件发出之前做一些初始化的工作，比如弹出进度条等等
+			
+			注意：
+
+             1、doOnSubscribe() 默认运行在事件产生的线程里面，然而事件产生的线程一般都会运行在 io 线程里。那么这个时候做一些，更新UI的操作，是线程不安全的。
+
+                 所以如果事件产生的线程是io线程，但是我们又要在doOnSubscribe() 更新UI ， 这时候就需要线程切换。
+
+             2、如果在 doOnSubscribe() 之后有 subscribeOn() 的话，它将执行在离它最近的 subscribeOn() 所指定的线程。   
+
+             3、 subscribeOn() 事件产生的线程 ； observeOn() : 事件消费的线程
+			 
+			 
+			 示例代码
+			 如下，在 doOnSubscribe()的后面跟一个 subscribeOn() ，就能指定准备工作的线程了。
+			 
+			Observable.create(onSubscribe)
+			.subscribeOn(Schedulers.io())
+			.doOnSubscribe(new Action0() {
+				@Override
+				public void call() {
+					progressBar.setVisibility(View.VISIBLE); // 需要在主线程执行
+				}
+			})
+			.subscribeOn(AndroidSchedulers.mainThread()) // 指定主线程
+			.observeOn(AndroidSchedulers.mainThread())
+			.subscribe(subscriber);
+			 
+		17.range 操作符的使用 
+			Range操作符发射一个范围内的有序整数序列，你可以指定范围的起始和长度。
+
+			RxJava将这个操作符实现为range函数，它接受两个参数，一个是范围的起始值，一个是范围的数据的数目。如果你将第二个参数设为0，将导致Observable不发射任何数据（如果设置为负数，会抛异常）。
+
+			range默认不在任何特定的调度器上执行。有一个变体可以通过可选参数指定Scheduler。
+			
+		18.defer 操作符
+		
+			可以看到，just操作符是在创建Observable就进行了赋值操作，而defer是在订阅者订阅时才创建Observable，此时才进行真正的赋值操作。
+			Defer操作符会一直等待直到有观察者订阅它，然后它使用Observable工厂方法生成一个Observable。它对每个观察者都这样做，因此尽管每个订阅者都以为自己订阅的是同一个Observable，事实上每个订阅者获取的是它们自己的单独的数据序列。
+			在某些情况下，等待直到最后一分钟（就是知道订阅发生时）才生成Observable可以确保Observable包含最新的数据。
+			
+			
+		19.concat
+			在第一个主题调用complete后执行第二个主题，依次类推。
+		
+			取数据先检查缓存的场景
+			取数据，首先检查内存是否有缓存 
+			然后检查文件缓存中是否有 
+			最后才从网络中取 
+			前面任何一个条件满足，就不会执行后面的
+			
+			//主要就是靠concat operator来实现
+			
+			Observable.concat(memory, disk, network)
+			.first()
+			.subscribeOn(Schedulers.newThread())
+			.subscribe(s -> {
+				memoryCache = "memory";
+				System.out.println("--------------subscribe: " + s);
+			});
+		
+	6.生命周期控制和内存优化
+	
+		1、取消订阅 subscription.unsubscribe()
+			一般在这个方法调用前，可以使用 isUnsubscribed() 先判断一下状态。
+		
+		2、线程调度
+			1.Scheduler调度器，相当于线程控制器
+				Schedulers.immediate() : 直接在当前线程运行，相当于不指定线程。这是默认的 Scheduler。
+
+				Schedulers.newThread() :总是启用新线程，并在新线程执行操作.
+
+				Schedulers.io():I/O 操作（读写文件、读写数据库、网络信息交互等）所使用的 Scheduler。行为模式和 newThread() 差不多，区别在于 io() 的内部实现是是用一个无数量上限的线程池，可以重用空闲的线程，因此多数情况下 io() 比 newThread() 更有效率。不要把计算工作放在 io() 中，可以避免创建不必要的线程。
+
+				Schedulers.computation() : 计算所使用的 Scheduler。这个计算指的是 CPU 密集型计算，即不会被 I/O 等操作限制性能的操作，例如图形的计算。这个 Scheduler 使用的固定的线程池，大小为 CPU 核数。不要把 I/O 操作放在 computation() 中，否则 I/O 操作的等待时间会浪费 CPU。
+
+				还有RxAndroid里面专门提供了AndroidSchedulers.mainThread()，它指定的操作将在 Android 主线程运行。
+		
+			2.场景
+				线程:
+				xjava默认运行在当前线程中。如果当前线程是子线程，则rxjava运行在子线程；同样，当前线程是主线程，则rxjava运行在主线程
+				
+				1.常见的场景：为了不阻塞UI，在子线程加载数据，在主线线程显示数据
+				
+				2.Scheduler 自由多次切换线程。恩，这个更为牛逼
+					observeOn() 可以调用多次来切换线程，observeOn 决定他下面的方法执行时所在的线程。
+					subscribeOn() 用来确定数据发射所在的线程，位置放在哪里都可以，但它是只能调用一次的。
+					
+			3.线程说明
+				对于 create() , just() , from()   等                 --- 事件产生   
+				map() , flapMap() , scan() , filter()  等    		 --  事件加工
+
+				subscribe()                                          --  事件消费
+
+				事件产生：默认运行在当前线程，可以由 subscribeOn()  自定义线程
+				事件加工：默认跟事件产生的线程保持一致, 可以由 observeOn() 自定义线程
+				事件消费：默认运行在当前线程，可以有observeOn() 自定义
+					
+		3.rxlifecycle 框架的使用 //控制生命周期
+		
+			1.让你的activity继承RxActivity,RxAppCompatActivity,RxFragmentActivity
+				让你的fragment继承RxFragment,RxDialogFragment;下面的代码就以RxAppCompatActivity举例
+
+			2.bindToLifecycle 方法
+				在子类使用Observable中的compose操作符，调用，完成Observable发布的事件和当前的组件绑定，实现生命周期同步。从而实现当前组件生命周期结束时，自动取消对Observable订阅。
+			
+			3.bindUntilEvent( ActivityEvent event) 方法
+			
+				ActivityEvent.CREATE: 在Activity的onCreate()方法执行后，解除绑定。
+
+				ActivityEvent.START:在Activity的onStart()方法执行后，解除绑定。
+
+				ActivityEvent.RESUME:在Activity的onResume()方法执行后，解除绑定。
+
+				ActivityEvent.PAUSE: 在Activity的onPause()方法执行后，解除绑定。
+
+				ActivityEvent.STOP:在Activity的onStop()方法执行后，解除绑定。
+
+				ActivityEvent.DESTROY:在Activity的onDestroy()方法执行后，解除绑定。
+				
+	7. RxBinding的使用
+		1.RxBinding 是 Jake Wharton 的一个开源库，它提供了一套在 Android 平台上的基于 RxJava的 Binding API。
+			所谓 Binding，就是类似设置 OnClickListener 、设置 TextWatcher 这样的注册绑定对象的 API。
+		2.
+			
+			
+			
+------------------------------------------------------------------------			
+
+
+四(博文总结):深入浅出RxJava(系列四篇) //CSDN
+	1.RxJava最核心的两个东西是Observables（被观察者，事件源）和Subscribers（观察者）。Observables发出一系列事件，Subscribers处理这些事件
+	2.just //Observable.just就是用来创建只发出一个事件就结束的Observable对象
+	
+	3.map  //map操作符，就是用来把把一个事件转换为另一个事件的,map()操作符就是用于变换Observable对象的，map操作符返回一个Observable对象，这样就可以实现链式调用
+	4.from //Observable.from()方法，它接收一个集合作为输入，然后每次输出一个元素给subscriber,
+		Observable.from("url1", "url2", "url3")
+		.subscribe(url -> System.out.println(url));
+		
+	5.flatMap() 
+		一个接口的请求依赖另一个API请求返回的数据
+		
+		//Observable.flatMap()接收一个Observable的输出作为输入，同时输出另外一个Observable
+		因为 map() 是一对一的转化，而我现在的要求是一对多的转化flatMap()
+	
+	6.filter()  //filter()输出和输入相同的元素，并且会过滤掉那些不满足检查条件的。
+	7.take()    //输出最多指定数量的结果。
+	8.doOnNext()  //允许我们在每次输出一个元素之前做一些额外的事情，比如这里的保存标题。
+	9.错误处理  // onComplete()和onError()函数,每一个Observerable对象在终结的时候都会调用onCompleted()或者onError()方法
+	10.调度器  //使用RxJava，你可以使用subscribeOn()指定观察者代码运行的线程，使用observerOn()指定订阅者运行的线程
+	11.Subscription //订阅（Subscriptions）,当调用Observable.subscribe()，会返回一个Subscription对象。这个对象代表了被观察者和订阅者之间的联系。
+	   你可以在后面使用这个Subscription对象来操作被观察者和订阅者之间的联系.
+	    subscription.unsubscribe();
+		System.out.println("Unsubscribed=" + subscription.isUnsubscribed());
+		// Outputs "Unsubscribed=true"
+	
+	
+	12.RxAndroid  //RxAndroid是RxJava的一个针对Android平台的扩展。它包含了一些能够简化Android开发的工具。
+		1.AndroidSchedulers //提供了针对Android的线程系统的调度器
+		2.AndroidObservable
+			它提供了跟多的功能来配合Android的生命周期。bindActivity()和bindFragment()方法默认使用AndroidSchedulers.mainThread()来执行观察者代码，
+			这两个方法会在Activity或者Fragment结束的时候通知被观察者停止发出新的消息。
+		3.AndroidObservable.fromBroadcast()方法 //它允许你创建一个类似BroadcastReceiver的Observable对象。下面的例子展示了如何在网络变化的时候被通知到
+		4.ViewObservable ---> RxView
+			使用它可以给View添加了一些绑定。如果你想在每次点击view的时候都收到一个事件，可以使用ViewObservable.clicks()，或者你想监听TextView的内容变化，可以使用ViewObservable.text()。
+		
+		5.Retrofit 
+			大名鼎鼎的Retrofit库内置了对RxJava的支持。通常调用发可以通过使用一个Callback对象来获取异步的结果
+			使用RxJava，你可以直接返回一个Observable对象。
+			使用RxJava+Retrofit可以多么简单地组合多个REST请求。
+
+		6.遗留代码，运行极慢的代码 
+			绝大多数时候Observable.just() 和 Observable.from() 能够帮助你从遗留代码中创建 Observable 对象:
+			上面的例子中如果oldMethod()足够快是没有什么问题的，但是如果很慢呢？调用oldMethod()将会阻塞住他所在的线程。 
+			为了解决这个问题，可以参考我一直使用的方法–使用defer()来包装缓慢的代码：
+			
+		7.生命周期
+			我把最难的不分留在了最后。如何处理Activity的生命周期？主要就是两个问题： 
+			1.在configuration改变（比如转屏）之后继续之前的Subscription。
+			
+			2.Observable持有Context导致的内存泄露  //取消订阅
+			
+				//一个很常见的模式就是使用CompositeSubscription来持有所有的Subscriptions，然后在onDestroy()或者onDestroyView()里取消所有的订阅。
+				//你可以在Activity/Fragment的基类里创建一个CompositeSubscription对象，在子类中使用它。
+				
+-------------------------------------------------------------------			
+				
+五.RxAndroid之Rxlifecycle使用(csdn博客)
+	1.RxLifecycle 地址：https://github.com/trello/RxLifecycle 。
+		该项目是为了防止RxJava中subscription导致内存泄漏而诞生的，核心思想是通过监听Activity、Fragment的生命周期，来自动断开subscription以防止内存泄漏。
+	
+	2.两种方式
+		1.手动设置取消订阅的时机
+			 //Note:手动设置在activity onPause的时候取消订阅
+            .compose(this.<Long>bindUntilEvent(ActivityEvent.PAUSE))
+		
+		2.绑定生命周期，自动取消订阅
+			//Note:bindToLifecycle的自动取消订阅示例，因为是在onStart的时候调用，所以在onStop的时候自动取消订阅
+            .compose(this.<Long>bindToLifecycle())
+			
+	3.注意事项  //compose放置的位置
+	
+		 .compose(this.<Long>bindUntilEvent(ActivityEvent.PAUSE))
+		 
+	4.延伸： 
+		RxLifecycle － 当Activity被destory时自动暂停网络请求
+            .subscribe(new Action1<Long>() {
+	
+------------------------------------------------------------------------
+
+六.RxBinding  //RxBinding 是一组开源库，它允许你以RxJava的形式来处理UI事件
+	1.类似设置 OnClickListener 、设置 TextWatcher 这样的注册绑定对象的 API。
+		并对普通的控件，V4,V7等等做了相应的支持。
+		
+	2.EditText用RxTextView,其他一些还是用RxView.
+
+		api提供了 诸如textChanges ,afterTextChangeEvents等一系列替代之前回调的方法，进一步摆脱“回调地狱”。
+
+		因为是Rx套餐，所以那些线程行为，异步行为，.map() .first()等等等方法都可以用
+
+		这边提再一个“优化”的问题
+
+		当你逻辑结束了不用了，之前订阅的被观察者与观察者的关系请做取消订阅操作，调用 unsubscribe()就行
+
+	3.第二，许多Android UI 事件内部接口返回多个参数。但RxJava observables 只能返回一个参数(也不能是…)。因此，你需要把这些参数封装为一个才行。
+	4.share() 
+		返回一个新的Observable ，该Observable会广播给所有之前的。
+		在 context 中使用 share 允许对同一个button点击事件的多次监听，简直太强大了。
+		
+		还有:例如publish(), share(), replay()
+	
+	
+
+--------------------------------------------------------
+
+七.rengwuxian/RxJavaSamples(github) //RxJava 和 Retrofit 结合使用的几个最常见使用方式举例
+
+	1.缓存
+		使用 BehaviorSubject 缓存数据。
+
+--------------------------------------------------------		
+		
+八.可能是东半球最全的RxJava使用场景小结(CSDN)
+
+
+--------------------------------------------------------
+九.Retrofit2 完全解析 探索与okhttp之间的关系(CSDN) 
+// http://blog.csdn.net/lmj623565791/article/details/51304204
+	1.一般的get请求
+		 @GET("users")
+		 通过@GET注解标识为get请求，@GET中所填写的value和baseUrl组成完整的路径，baseUrl在构造retrofit对象时给出。
+		 
+	2.converterFactories， //该对象用于转化数据
+	
+		例如将返回的responseBody转化为对象等；当然不仅仅是针对返回的数据，
+		还能用于一般备注解的参数的转化例如@Body标识的对象做一些操作，后面遇到源码详细再描述。
+	
+		提供了ConverterFactory用于对返回的requestBody进行转化和特殊的requestBody的构造
+		 .addConverterFactory(GsonConverterFactory.create())
+		 
+	3.动态的url访问@PATH (参数占位符)
+		public interface IUserBiz
+		{
+			@GET("{username}")
+			Call<User> getUser(@Path("username") String username);
+		}
+		//方法接收一个username参数，并且我们的@GET注解中使用{username}声明了访问路径，这里你可以把{username}当做占位符，而实际运行中会通过@PATH("username")所标注的参数进行替换。
+	
+	
+	4.查询参数的设置@Query (查询参数,传参)
+	
+		//当然相同的方式也适用于POST，只需要把注解修改为@POST即可。
+	
+		http://baseurl/users?sortby=username
+		public interface IUserBiz
+		{
+			@GET("users")
+			Call<List<User>> getUsersBySort(@Query("sortby") String sort);
+		}
+		
+	5.POST请求体的方式向服务器传入json字符串@Body
+		
+		1.retrofit是如何将user对象转化为字符串呢
+		
+		public interface IUserBiz
+		{
+		 @POST("add")
+		 Call<List<User>> addUser(@Body User user);
+		}
+		
+		//这个@Body需要用到这个方法，叫做requestBodyConverter，根据参数转化为RequestBody
+		
+		
+	6.下面对应okhttp，还有两种requestBody，一个是FormBody，一个是MultipartBody，
+		前者以表单的方式传递简单的键值对，后者以POST表单的方式上传文件可以携带参数，retrofit也二者也有对应的注解
+		
+	7.表单的方式传递键值对@FormUrlEncoded
+		通过@POST指明url，添加FormUrlEncoded，然后通过@Field添加参数即可。
+		
+		public interface IUserBiz
+		{
+			@POST("login")
+			@FormUrlEncoded
+			Call<User> login(@Field("username") String username, @Field("password") String password);
+		}
+		
+	8.单文件上传@Multipart
+		下面看一下单文件上传，依然是再次添加个方法：
+		public interface IUserBiz
+		{
+			@Multipart
+			@POST("register")
+			Call<User> registerUser(@Part MultipartBody.Part photo, @Part("username") RequestBody username, @Part("password") RequestBody password);
+		}
+		
+		这里@MultiPart的意思就是允许多个@Part了，我们这里使用了3个@Part，第一个我们准备上传个文件，使用了MultipartBody.Part类型，其余两个均为简单的键值对。
+		
+		
+		//使用
+		File file = new File(Environment.getExternalStorageDirectory(), "icon.png");
+		RequestBody photoRequestBody = RequestBody.create(MediaType.parse("image/png"), file);
+		MultipartBody.Part photo = MultipartBody.Part.createFormData("photos", "icon.png", photoRequestBody);
+
+		Call<User> call = userBiz.registerUser(photo, RequestBody.create(null, "abc"), RequestBody.create(null, "123"));
+		
+		
+	9.多文件上传@PartMap
+	
+		 public interface IUserBiz
+		 {
+			 @Multipart
+			 @POST("register")
+			  Call<User> registerUser(@PartMap Map<String, RequestBody> params,  @Part("password") RequestBody password);
+		}
+		
+		这里使用了一个新的注解@PartMap，这个注解用于标识一个Map，Map的key为String类型，代表上传的键值对的key(与服务器接受的key对应),value即为RequestBody，有点类似@Part的封装版本。
+		
+		执行的代码：
+		File file = new File(Environment.getExternalStorageDirectory(), "messenger_01.png");
+        RequestBody photo = RequestBody.create(MediaType.parse("image/png", file);
+		Map<String,RequestBody> photos = new HashMap<>();
+		photos.put("photos\"; filename=\"icon.png", photo);
+		photos.put("username",  RequestBody.create(null, "abc"));
+
+		Call<User> call = userBiz.registerUser(photos, RequestBody.create(null, "123"));\
+		
+		解释:
+		可以看到，可以在Map中put进一个或多个文件，键值对等，当然你也可以分开，
+		单独的键值对也可以使用@Part，这里又看到设置文件的时候，相对应的key很奇怪，
+		例如上例"photos\"; filename=\"icon.png",前面的photos就是与服务器对应的key，
+		后面filename是服务器得到的文件名，ok，参数虽然奇怪，但是也可以动态的设置文件名，不太影响使用~~
+		
+
+	10.下载文件
+		这个其实我觉得直接使用okhttp就好了，使用retrofit去做这个事情真的有点瞎用的感觉~~
+		@GET("download")
+		Call<ResponseBody> downloadTest();
+		
+		调用:
+		Call<ResponseBody> call = userBiz.downloadTest();
+		call.enqueue(new Callback<ResponseBody>()
+		{
+			@Override
+			public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response)
+			{
+				InputStream is = response.body().byteStream();
+				//save file
+			}
+
+			@Override
+			public void onFailure(Call<ResponseBody> call, Throwable t)
+			{
+
+			}
+		});
+		
+		
+	11.配置OkHttpClient
+		这个需要简单提一下，很多时候，比如你使用retrofit需要统一的log管理，给每个请求添加统一的header等，这些都应该通过okhttpclient去操作，比如addInterceptor
+		
+		   HttpLoggingInterceptor interceptor = new HttpLoggingInterceptor();
+        interceptor.setLevel(HttpLoggingInterceptor.Level.BODY);
+        client = new OkHttpClient.Builder()
+                .addInterceptor(interceptor)
+                .retryOnConnectionFailure(true)
+                .connectTimeout(15, TimeUnit.SECONDS)
+                .addNetworkInterceptor(authorizationInterceptor)
+                .build();
+				
+		其中 level 为 BASIC / HEADERS / BODY，BODY等同于1.9中的FULL
+		retryOnConnectionFailure:错误重联
+		addInterceptor:设置应用拦截器，可用于设置公共参数，头信息，日志拦截等
+		addNetworkInterceptor：网络拦截器，可以用于重试或重写
+
+		
+	12.源码解析
+	
+	13.retrofit中的各类细节
+	
+
+
+--------------------------------------------------------
+
+十.Okhttp-wiki 之 Interceptors 拦截器(简书 )	//	http://www.jianshu.com/p/2710ed1e6b48
+	1.拦截器是一种强大的机制,可以监视、重写和重试调用.下面是一个简单例子,拦截发出的请求和传入的响应的日志.
+	
+	
+
+----------------------------------------------------------------
+
+	
+十一.Retrofit2.0使用总结(简书) //http://www.jianshu.com/p/3e13e5d34531
+	1.@Url：使用全路径复写baseUrl，适用于非统一baseUrl的场景。
+		@GET
+		Call<ResponseBody> v3(@Url String url);
+	
+	2.@Streaming:用于下载大文件
+
+		@Streaming
+		@GET
+		Call<ResponseBody> downloadFileWithDynamicUrlAsync(@Url String fileUrl);
+		ResponseBody body = response.body();
+		long fileSize = body.contentLength();
+		InputStream inputStream = body.byteStream();
+
+	3.自定义Interceptor
+		Retrofit 2.0 底层依赖于okHttp，所以需要使用okHttp的Interceptors 来对所有请求进行拦截。
+		我们可以通过自定义Interceptor来实现很多操作,打印日志,缓存,重试等等。
+		
+		要实现自己的拦截器需要有以下步骤
+		(1) 需要实现Interceptor接口，并复写intercept(Chain chain)方法,返回response
+		(2) Request 和 Response的Builder中有header,addHeader,headers方法,需要注意的是使用header有重复的将会被覆盖,而addHeader则不会。
+				
+				
+	4.缓存策略
+		设置缓存就需要用到OkHttp的interceptors，缓存的设置需要靠请求和响应头。
+		如果想要弄清楚缓存机制，则需要了解一下HTTP语义，其中控制缓存的就是Cache-Control字段
+		
+	5.错误处理
+	
+	6.网络状态监听
+		
+	7.Retrofit封装
+		全局单利的OkHttpClient,	
